@@ -1,0 +1,570 @@
+\documentclass[12pt,a4paper]{article}
+
+% Idioma y codificación
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Formato de página y utilidades
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{float}
+
+% Código fuente
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  breaklines=true,
+  tabsize=2,
+  showstringspaces=false,
+  columns=fullflexible
+}
+
+\title{Proyecto parte R2}
+\author{
+Alumnos\\
+Apellidos, Fulano 1\\
+Apellidos, Fulano 2
+}
+\date{10 de septiembre de 2025}
+
+\begin{document}
+
+% --- Portada ---
+\begin{titlepage}
+    \centering
+    % Descomenta y coloca el archivo si deseas un logo
+    \includegraphics[width=0.5\textwidth]{UNSA.PNG}\par\vspace{1cm}
+    {\large Escuela Profesional de Ingeniería Electrónica\par}
+    \vspace{0.5cm}
+
+    \vspace{1.0cm}
+    {\huge\bfseries Proyecto parte R2\par}
+    \vspace{2.0cm}
+    {\large Alumnos\par}
+    {\Large Huillca Nuñez Jeferson Junior
+\\
+    
+    Maldonado Vilca Crystopher Eduardo\par}
+    \vfill
+    {\large Profesor: Dr. Juan C. Cutipa Luque\par}
+    \vspace{1cm}
+    {\large 05 de Noviembre de 2025\par}
+\end{titlepage}
+
+\section{Introducción}
+
+El estudio de sistemas de control no lineales representa un aspecto esencial en el desarrollo de técnicas de automatización avanzadas. Los sistemas hidráulicos, como el tanque de nivel, presentan un comportamiento inherentemente no lineal debido a la relación cuadrática entre el caudal y la altura del fluido, lo que los convierte en un caso de estudio ideal para la aplicación de estrategias de control moderno.
+
+En este trabajo se diseñan y aplican tres estrategias de control no lineal: el \textbf{Control Backstepping}, el \textbf{Control por Modos Deslizantes (SMC)} y el \textbf{Control Adaptativo MRAC (Model Reference Adaptive Control)}. Cada uno de estos controladores se implementa sobre el modelo ideal de un tanque simple, y posteriormente se analiza su desempeño frente a perturbaciones e incertidumbres paramétricas.
+
+El objetivo principal es lograr un seguimiento adecuado de la referencia y mantener la estabilidad del sistema ante posibles variaciones en los parámetros. Para ello, se emplean fundamentos teóricos de estabilidad de Lyapunov, leyes de adaptación y funciones de conmutación, verificando los resultados mediante simulaciones en \textit{Simulink} y análisis teórico. De esta forma, el informe busca no solo mostrar el funcionamiento de cada controlador, sino también evidenciar sus ventajas, limitaciones y diferencias en cuanto a comportamiento dinámico y robustez.
+
+---
+
+\section{Fundamento Teórico}
+
+\subsection{Modelado del sistema}
+
+El sistema considerado corresponde a un tanque de nivel cuya dinámica no lineal se describe mediante:
+\[
+\dot{h} = aV_p - b\sqrt{h},
+\]
+donde:
+\begin{itemize}
+    \item \(h(t)\): altura del fluido en el tanque [cm],
+    \item \(V_p(t)\): voltaje aplicado a la bomba [V],
+    \item \(a = \dfrac{K_p}{A_t}\): parámetro asociado a la ganancia de la bomba,
+    \item \(b = \dfrac{A_o\sqrt{2g}}{A_t}\): coeficiente que describe el flujo de salida.
+\end{itemize}
+
+El término \(aV_p\) representa el caudal de entrada generado por la bomba, mientras que \(b\sqrt{h}\) modela el caudal de salida según la ecuación de Torricelli. Este comportamiento introduce una no linealidad importante que dificulta la aplicación directa de métodos de control lineales.
+
+---
+
+\subsection{Control Backstepping}
+
+El método Backstepping es una técnica de control no lineal basada en la teoría de Lyapunov. Su objetivo es diseñar la ley de control de forma recursiva, garantizando la estabilidad del sistema en cada paso de diseño. 
+
+Para el tanque ideal, se define el error:
+\[
+e = h - h_d,
+\]
+y se impone una dinámica deseada estable:
+\[
+\dot{e} = -k e, \qquad k > 0.
+\]
+De esta forma, la ley de control resulta:
+\[
+V_p = \frac{1}{a}\big(\dot{h}_d - k(h - h_d) + b\sqrt{h}\big).
+\]
+
+Con esta elección, se cumple que \(\dot{V} = -k e^2 \le 0\), garantizando la estabilidad del sistema y el seguimiento asintótico de la referencia. Sin embargo, su desempeño puede degradarse ante incertidumbres paramétricas o perturbaciones externas.
+
+---
+
+\subsection{Control por Modos Deslizantes (SMC)}
+
+El control por Modos Deslizantes es una estrategia robusta que busca forzar la dinámica del sistema a evolucionar sobre una superficie de deslizamiento definida a partir del error. Para el tanque simple, se define:
+\[
+s = h - h_d,
+\]
+y se impone la condición de llegada:
+\[
+\dot{s} = -\eta\,\text{sign}(s), \qquad \eta > 0.
+\]
+De esta forma, la ley de control ideal queda:
+\[
+V_p = \frac{1}{a}\big(\dot{h}_d + b\sqrt{h} - \eta\,\text{sign}(s)\big).
+\]
+
+Para evitar el fenómeno de \textit{chattering}, se reemplaza la función signo por una función de saturación:
+\[
+\text{sat}\!\left(\frac{s}{\phi}\right) =
+\begin{cases}
+\text{sign}(s), & |s| > \phi,\\[4pt]
+\dfrac{s}{\phi}, & |s| \le \phi,
+\end{cases}
+\]
+donde \(\phi>0\) determina el grosor de la capa límite. Este método ofrece gran robustez frente a perturbaciones y variaciones paramétricas, aunque puede introducir un pequeño error estacionario.
+
+---
+
+\subsection{Control Adaptativo MRAC}
+
+El control adaptativo de referencia (MRAC) busca que la salida del sistema real siga el comportamiento de un modelo de referencia predefinido. Dicho modelo se expresa como:
+\[
+\dot{h}_m = -\alpha (h_m - r),
+\]
+donde \(\alpha>0\) determina la rapidez de la respuesta del modelo.
+
+Definiendo el error \(e = h - h_m\), la ley de control adaptativa se plantea como:
+\[
+V_p = \frac{1}{\hat{a}}\big(\dot{h}_m - k e + \hat{b}\sqrt{h}\big),
+\]
+con leyes de adaptación:
+\[
+\dot{\hat{a}} = \gamma_a e V_p, \qquad
+\dot{\hat{b}} = -\gamma_b e\sqrt{h},
+\]
+donde \(\gamma_a, \gamma_b > 0\) son ganancias de adaptación. A partir del análisis de Lyapunov, se demuestra que \(\dot{V} = -k e^2 \le 0\), garantizando estabilidad y seguimiento incluso con parámetros desconocidos o variantes.
+
+---
+
+\subsection{Control combinado Backstepping–SMC}
+
+El esquema híbrido Backstepping–SMC combina la estabilidad del Backstepping con la robustez del control por Modos Deslizantes. La ley de control propuesta es:
+\[
+V_p = \frac{1}{a}\left(\dot{h}_d - k e + b\sqrt{h} - \eta\,\text{sat}\!\left(\frac{s}{\phi}\right)\right),
+\]
+donde el término deslizante \(-\eta\,\text{sat}(s/\phi)\) actúa como compensador robusto frente a perturbaciones e incertidumbres en los parámetros. 
+
+Este método mantiene la estabilidad nominal del Backstepping y añade la robustez característica de los modos deslizantes, reduciendo el error de seguimiento sin aumentar el \textit{chattering}, lo que lo convierte en una alternativa eficiente y práctica para sistemas no lineales.
+
+
+\section{Diseño del controlador Backstepping para un tanque ideal}
+
+\subsection{Modelo del sistema}
+
+El modelo dinámico ideal del tanque simple está dado por la ecuación no lineal:
+\[
+\dot{h} = a\,V_p - b\,\sqrt{h},
+\]
+donde:
+\begin{itemize}
+    \item \(h(t)\) es la altura del fluido en el tanque [cm],
+    \item \(V_p(t)\) es la tensión aplicada a la bomba [V],
+    \item \(a = \dfrac{K_p}{A_t}\) es el parámetro asociado a la ganancia de la bomba,
+    \item \(b = \dfrac{A_o\sqrt{2g}}{A_t}\) representa el flujo de salida por el orificio.
+\end{itemize}
+
+El objetivo de control consiste en que la altura \(h(t)\) siga una referencia deseada \(h_d(t)\) de forma estable y con error nulo en régimen permanente.
+
+\vspace{0.5em}
+Por tanto, el modelo se puede escribir como:
+\[
+\dot{h} = a\,V_p - b\,\sqrt{h}, \qquad a>0,\; b>0.
+\]
+
+---
+
+\subsection{Definición de error y función de Lyapunov}
+
+Se define el error de seguimiento como:
+\[
+e = h - h_d,
+\]
+cuya dinámica resulta de derivar respecto al tiempo:
+\[
+\dot{e} = a\,V_p - b\,\sqrt{h} - \dot{h}_d.
+\]
+
+Para el diseño del controlador se propone la siguiente función candidata de Lyapunov:
+\[
+V(e) = \tfrac{1}{2}e^2,
+\]
+cuya derivada temporal es:
+\[
+\dot{V} = e\,\dot{e} = e\,(a\,V_p - b\sqrt{h} - \dot{h}_d).
+\]
+
+---
+
+\subsection{Diseño del controlador Backstepping}
+
+Se desea imponer una dinámica de error estable de la forma:
+\[
+\dot{e} = -k\,e, \qquad k>0,
+\]
+que garantice convergencia exponencial hacia el equilibrio \(e=0\).
+
+Igualando la dinámica real con la deseada y despejando \(V_p\), se obtiene la ley de control:
+\[
+a\,V_p - b\sqrt{h} - \dot{h}_d = -k\,e,
+\]
+de donde:
+\[
+\boxed{
+V_p = \frac{1}{a}\big(\dot{h}_d - k(h-h_d) + b\sqrt{h}\big)
+}.
+\]
+
+Sustituyendo en la derivada de Lyapunov:
+\[
+\dot{V} = e(-k e) = -k e^2 \le 0,
+\]
+se concluye que el sistema cerrado es estable, garantizando que el error de seguimiento converge a cero de manera exponencial.
+
+---
+
+\noindent
+En resumen, el controlador Backstepping linealiza de forma virtual la dinámica del tanque y utiliza la función de Lyapunov para diseñar una ley de control que asegura estabilidad global y seguimiento de la referencia.
+
+\section{Diseño del SMC}
+\subsection{Superficie de deslizamiento}
+Dado que el sistema es de primer orden, se emplea la superficie escalar:
+\[
+s(e) := e.
+\]
+Se impone la dinámica de llegada mejorada:
+\[
+\dot s = -\lambda s - k\,\operatorname{sign}(s),\qquad \lambda>0,\ k>0,
+\]
+o bien la versión suavizada en la práctica:
+\[
+\dot s = -\lambda s - k\,\mathrm{sat}\!\left(\frac{s}{\phi}\right),
+\]
+donde \(\phi>0\) es el espesor de la capa límite y \(\mathrm{sat}(\cdot)\) la función saturación.
+
+\subsection{Derivación de la ley de control}
+Partiendo de \(\dot e=\dot L_1 - \dot L_{1r}\) y usando \eqref{eq:modelo_compacto}:
+\[
+\dot e = b\,V_p - a_1\sqrt{L_1} - \dot L_{1r}.
+\]
+Imponiendo la dinámica de llegada:
+\[
+b\,V_p - a_1\sqrt{L_1} - \dot L_{1r} = -\lambda e - k\,\operatorname{sign}(e).
+\]
+Despejando \(V_p\) se obtiene la ley ideal:
+\begin{equation}\label{eq:vp_ideal}
+V_p = \frac{a_1\sqrt{L_1} + \dot L_{1r} - \lambda e - k\,\operatorname{sign}(e)}{b}.
+\end{equation}
+
+Para implementación práctica y reducción de chattering se reemplaza \(\operatorname{sign}\) por una función suavizada. En este trabajo se emplea \(\tanh(\cdot)\) con un factor de escalado \(\varepsilon\) (relacionado con \(\phi\)):
+\[
+\operatorname{sign}(e) \approx \tanh\!\Big(\frac{e}{\varepsilon}\Big),\qquad \varepsilon=\phi/3.
+\]
+La ley implementable queda:
+\begin{equation}\label{eq:vp_final}
+\boxed{%
+V_p = \frac{a_1\sqrt{L_1} + \dot L_{1r} - \lambda e - k\,\tanh\!\left(\dfrac{e}{\varepsilon}\right)}{b}.%
+}
+\end{equation}
+
+\subsection{Análisis de estabilidad (Lyapunov)}
+Considerar la función candidata de Lyapunov:
+\[
+V(s)=\tfrac{1}{2}s^2.
+\]
+Su derivada a lo largo de las trayectorias es
+\[
+\dot V = s\dot s = s(-\lambda s - k\operatorname{sign}(s)) = -\lambda s^2 - k |s| \le 0,
+\]
+lo que muestra estabilidad en el sentido de Lyapunov y llegada al conjunto \(s=0\) en tiempo finito cuando se usa la acción discontinuo ideal. Con la versión suavizada la convergencia será hacia una capa límite alrededor de \(s=0\) cuyo espesor está relacionado con \(\phi\) y los parámetros de diseño. El término \(\lambda s\) aporta amortiguamiento continuo y reduce la oscilación final.
+
+\subsection{Tuning y consideraciones prácticas}
+\begin{itemize}
+  \item Punto de partida recomendado: \(\lambda\in[0.2,0.6]\), \(k\in[0.1,0.5]\), \(\phi\in[0.02,0.1]\) (cm).
+  \item Si se observa \emph{chattering} aumentar \(\phi\) o reducir \(k\).
+  \item Si hay error en régimen dentro de la capa límite, aumentar \(\lambda\) o añadir un término integral suave de ganancia muy pequeña.
+  \item Verificar unidades coherentes en todo el modelo (aquí todo en cm/segundo/volt).
+\end{itemize}
+
+\subsection{Funciones MATLAB utilizadas}
+A continuación se incluyen los códigos empleados en simulación: controlador mejorado (versión con \(\tanh\)) y planta ideal. Estos fragmentos se pueden incorporar en bloques \texttt{MATLAB Function} en Simulink o como funciones independientes para ODE.
+
+\subsection{Controlador SMC (MATLAB)}
+\begin{lstlisting}[caption={smc\_tank1\_improved.m — controlador SMC con tanh},label=lst:smc]
+function Vp = smc_tank1_improved(L1, L1r, dL1r)
+  % Control SMC con tanh y lambda más fuerte (versión limpia)
+  At1 = 15.5179; Ao1 = 0.3167; g = 980; Kp = 3.3;
+  b  = Kp/At1; a1 = Ao1*sqrt(2*g)/At1;
+
+  lambda = 0.5;   % aumenta proporcional
+  k      = 0.12;  % reduce discontinuo
+  phi    = 0.08;  % capa límite más ancha
+  eps    = phi/3;
+
+  L1 = max(L1,0);
+  e = L1 - L1r;
+  sat_e = tanh(e/eps);
+
+  Vp = ( a1*sqrt(L1) + dL1r - lambda*e - k*sat_e ) / b;
+end
+\end{lstlisting}
+
+\subsection{Planta (MATLAB)}
+\begin{lstlisting}[caption={tank1\_model.m — dinámica del tanque (versión ideal)} ,label=lst:plant]
+function dL1 = tank1_model(L1, Vp)
+% dL1 = b*Vp - a1*sqrt(L1)
+At1 = 15.5179; Ao1 = 0.3167; g = 980; Kp = 3.3;
+b  = Kp / At1;
+a1 = Ao1 * sqrt(2*g) / At1;
+
+% Protección mínima
+L1 = max(L1, 0);
+
+dL1 = b*Vp - a1*sqrt(L1);
+end
+\end{lstlisting}
+
+\subsection{Resultados clave}
+\begin{itemize}
+  \item Coeficientes calculados:
+  \[
+  \boxed{a_1 \approx 0.903\ \text{s}^{-1}, \qquad b \approx 0.213\ \frac{\text{cm}}{\text{s}\cdot\text{V}}.}
+  \]
+  \item Ley de control implementada (resultado a reportar):
+  \[
+  \boxed{%
+  V_p = \frac{a_1\sqrt{L_1} + \dot L_{1r} - \lambda (L_1-L_{1r}) - k\,\tanh\!\left(\dfrac{L_1-L_{1r}}{\varepsilon}\right)}{b}.%
+  }
+  \]
+  \item Parámetros de diseño empleados en las simulaciones:
+  \[
+  \lambda=0.5,\quad k=0.12,\quad \phi=0.08\ \text{(cm)},\quad \varepsilon=\frac{\phi}{3}\approx 0.0267.
+  \]
+\end{itemize}
+
+\section{Controlador Adaptativo MRAC para un tanque ideal}
+
+\subsection{Modelo del sistema}
+
+El modelo dinámico ideal del tanque simple se expresa como:
+\[
+\dot{h} = a\,V_p - b\,\sqrt{h},
+\]
+donde:
+\begin{itemize}
+    \item \(h(t)\): nivel del líquido en el tanque [cm],
+    \item \(V_p(t)\): voltaje aplicado a la bomba [V],
+    \item \(a = \dfrac{K_p}{A_t}\): parámetro que representa la ganancia de la bomba,
+    \item \(b = \dfrac{A_o\sqrt{2g}}{A_t}\): parámetro asociado al caudal de salida.
+\end{itemize}
+
+El objetivo de control consiste en que la altura \(h(t)\) siga una referencia deseada \(h_d(t)\) de manera estable, incluso en presencia de incertidumbre en los parámetros \(a\) y \(b\).
+
+---
+
+\subsection{Modelo de referencia}
+
+Se define un modelo de referencia de primer orden que describe la dinámica deseada del sistema:
+\[
+\dot{h}_m = -\alpha\,(h_m - r),
+\]
+donde:
+\begin{itemize}
+    \item \(h_m(t)\) es la salida del modelo de referencia,
+    \item \(r(t)\) es la señal de referencia externa,
+    \item \(\alpha>0\) determina la rapidez de la respuesta deseada.
+\end{itemize}
+
+El modelo de referencia describe un comportamiento de primer orden con constante de tiempo \(\tau_m = \frac{1}{\alpha}\), de modo que \(h_m(t) \to r(t)\) de manera exponencial.
+
+---
+
+\subsection{Definición del error y dinámica del error}
+
+Sea el error de seguimiento:
+\[
+e = h - h_m.
+\]
+Derivando respecto al tiempo:
+\[
+\dot{e} = a\,V_p - b\,\sqrt{h} - \dot{h}_m.
+\]
+
+El objetivo del control adaptativo MRAC es diseñar una ley de control \(V_p\) y leyes de adaptación para los parámetros \(\hat{a}\) y \(\hat{b}\) de forma que el error \(e\) tienda a cero, aun cuando los parámetros reales \(a\) y \(b\) sean desconocidos o variables.
+
+---
+
+\subsection{Ley de control adaptativa}
+
+Se propone la siguiente ley de control tipo directo:
+\[
+\boxed{
+V_p = \frac{1}{\hat{a}}\left(\dot{h}_m - k\,e + \hat{b}\sqrt{h}\right),
+}
+\]
+donde:
+\begin{itemize}
+    \item \(\hat{a}\) y \(\hat{b}\) son las estimaciones de los parámetros reales \(a\) y \(b\),
+    \item \(k>0\) es una ganancia de estabilización del error.
+\end{itemize}
+
+Sustituyendo en la dinámica del error:
+\[
+\dot{e} = -k\,e + (\hat{a}-a)\frac{V_p}{\hat{a}} + (\hat{b}-b)\sqrt{h}.
+\]
+
+---
+
+\subsection{Leyes de adaptación}
+
+Con el fin de compensar los términos de error paramétrico, se definen las siguientes leyes de adaptación basadas en Lyapunov:
+\[
+\boxed{
+\begin{aligned}
+\dot{\hat{a}} &= \gamma_a\, e\, V_p, \\[4pt]
+\dot{\hat{b}} &= -\,\gamma_b\, e\, \sqrt{h},
+\end{aligned}
+}
+\]
+donde \(\gamma_a, \gamma_b > 0\) son las ganancias de adaptación que determinan la rapidez con la que se actualizan las estimaciones de los parámetros.
+
+---
+
+\subsection{Análisis de estabilidad}
+
+Se considera la siguiente función candidata de Lyapunov:
+\[
+V = \tfrac{1}{2}e^2 + \frac{(\hat{a}-a)^2}{2\gamma_a} + \frac{(\hat{b}-b)^2}{2\gamma_b}.
+\]
+
+Derivando con respecto al tiempo:
+\[
+\dot{V} = e\,\dot{e} + \frac{(\hat{a}-a)}{\gamma_a}\dot{\hat{a}} + \frac{(\hat{b}-b)}{\gamma_b}\dot{\hat{b}}.
+\]
+
+Sustituyendo las expresiones de \(\dot{e}\), \(\dot{\hat{a}}\) y \(\dot{\hat{b}}\), y simplificando términos, se obtiene:
+\[
+\dot{V} = -k\,e^2 \le 0.
+\]
+
+Por lo tanto, \(\dot{V}\) es negativa semidefinida, lo que garantiza estabilidad en el sentido de Lyapunov.  
+En consecuencia, el error \(e\) tiende a cero de manera asintótica, y el sistema asegura seguimiento del modelo de referencia incluso frente a incertidumbres en los parámetros.
+
+\section{Controlador combinado Backstepping y Modos Deslizantes}
+
+\subsection{Modelo del sistema}
+
+El modelo dinámico ideal del tanque simple se expresa como:
+\[
+\dot{h} = a\,V_p - b\,\sqrt{h},
+\]
+donde:
+\begin{itemize}
+    \item \(h(t)\): nivel de fluido en el tanque [cm],
+    \item \(V_p(t)\): voltaje aplicado a la bomba [V],
+    \item \(a = \dfrac{K_p}{A_t}\): parámetro asociado a la ganancia de la bomba,
+    \item \(b = \dfrac{A_o\sqrt{2g}}{A_t}\): coeficiente relacionado con el flujo de salida.
+\end{itemize}
+
+El objetivo es lograr que la variable \(h(t)\) siga una trayectoria deseada \(h_d(t)\), manteniendo estabilidad incluso ante perturbaciones e incertidumbres en los parámetros del sistema.
+
+---
+
+\subsection{Motivación del método combinado}
+
+El método Backstepping garantiza estabilidad y seguimiento preciso cuando los parámetros del modelo son conocidos, pero presenta sensibilidad ante incertidumbres y perturbaciones externas.
+
+Por otro lado, el control por Modos Deslizantes (SMC) ofrece una gran robustez frente a perturbaciones, aunque puede generar oscilaciones de alta frecuencia (\textit{chattering}).
+
+Por ello, se propone un esquema híbrido \textbf{Backstepping–Modos Deslizantes} que combine las ventajas de ambos métodos:
+\begin{itemize}
+    \item Estabilidad y seguimiento del Backstepping,
+    \item Robustez del control deslizante ante incertidumbres.
+\end{itemize}
+
+---
+
+\subsection{Control nominal Backstepping}
+
+El controlador Backstepping nominal, obtenido previamente, está dado por:
+\[
+V_{p,\text{nom}} = \frac{1}{a}\left(\dot{h}_d - k e + b\,\sqrt{h}\right),
+\]
+donde:
+\[
+e = h - h_d, \qquad k > 0.
+\]
+
+Este controlador garantiza estabilidad en condiciones ideales, es decir, sin incertidumbre en los parámetros ni perturbaciones externas.
+
+---
+
+\subsection{Modelo con perturbación e incertidumbre}
+
+Cuando existen incertidumbres en los parámetros o perturbaciones externas, el modelo real puede expresarse como:
+\[
+\dot{h} = a\,V_p - b\,\sqrt{h} + d(t),
+\]
+donde \(d(t)\) representa una perturbación acotada por:
+\[
+|d(t)| \le \bar{d}.
+\]
+En este contexto, el controlador Backstepping nominal ya no garantiza robustez, por lo que se requiere la incorporación de un término correctivo basado en la teoría de Modos Deslizantes.
+
+---
+
+\subsection{Diseño del controlador híbrido Backstepping–SMC}
+
+Se define una superficie de deslizamiento:
+\[
+s = e = h - h_d,
+\]
+y se propone una ley de control combinada:
+\[
+\boxed{
+V_p = \frac{1}{a}\left(\dot{h}_d - k e + b\,\sqrt{h} - \eta\,\text{sat}\!\left(\frac{s}{\phi}\right)\right),
+}
+\]
+donde:
+\begin{itemize}
+    \item \(k > 0\): ganancia proporcional del término Backstepping,
+    \item \(\eta > 0\): ganancia del modo deslizante (control de robustez),
+    \item \(\phi > 0\): ancho de la capa límite para reducir el \textit{chattering}.
+\end{itemize}
+
+El término adicional \(-\eta\,\text{sat}(s/\phi)\) compensa la acción de perturbaciones y errores paramétricos, mejorando la robustez del sistema sin perder las propiedades de estabilidad del Backstepping nominal.
+
+\section*{Conclusiones}
+
+\begin{enumerate}
+    \item Se implementó exitosamente un sistema de control para un solo tanque, logrando mantener el nivel del líquido cercano al valor de referencia mediante un controlador backstepping simplificado. El modelo permitió observar un comportamiento estable y de respuesta suave ante variaciones en la entrada.
+
+    \item La reducción del sistema a un solo tanque facilitó el análisis y la simulación del proceso, eliminando la interacción entre tanques y permitiendo un estudio más claro de la dinámica y la influencia de los parámetros físicos sobre la respuesta del nivel.
+
+    \item El diseño e implementación en Simulink mostraron que el controlador propuesto es adecuado para el control de nivel en sistemas de primer orden, ofreciendo un desempeño satisfactorio en términos de estabilidad, seguimiento y comportamiento transitorio.
+\end{enumerate}
+
+
+
+
+\end{document}
